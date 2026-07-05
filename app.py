@@ -15,22 +15,24 @@ def health():
 @app.post("/digitize")
 async def digitize(file: UploadFile = File(...)):
     suffix = os.path.splitext(file.filename or "img.png")[1] or ".png"
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(await file.read())
-        img_path = tmp.name
-    try:
-        # NOTE: this runs the repo's digitize script and expects JSON on stdout.
-        # If the repo's command is different, change the list below to match its README.
+    with tempfile.TemporaryDirectory() as tmp_in, tempfile.TemporaryDirectory() as tmp_out:
+        img_path = os.path.join(tmp_in, "image" + suffix)
+        with open(img_path, "wb") as f:
+            f.write(await file.read())
+
         out = subprocess.run(
-            ["python", "src/digitize.py", "-i", img_path],
+            ["python", "src/digitize_report.py", "-i", img_path, "-o", tmp_out],
             capture_output=True, text=True, timeout=180
         )
-        text = (out.stdout or "").strip()
-        try:
-            return json.loads(text)
-        except Exception:
-            return {"error": "could not parse model output",
-                    "raw": text[:800], "stderr": (out.stderr or "")[:800]}
+
+        json_path = os.path.join(tmp_out, "image.json")
+        if os.path.exists(json_path):
+            with open(json_path) as f:
+                return json.load(f)
+        else:
+            return {"error": "no output produced",
+                    "stdout": (out.stdout or "")[:800],
+                    "stderr": (out.stderr or "")[:800]}
     finally:
         try: os.remove(img_path)
         except Exception: pass
