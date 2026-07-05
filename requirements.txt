@@ -12,3 +12,6 @@ tqdm
 typed-ast
 typing-extensions
 opencv-python
+fastapi
+uvicorn[standard]
+python-multipart
