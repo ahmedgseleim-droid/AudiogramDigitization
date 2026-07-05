@@ -1,5 +1,5 @@
 # app.py — web wrapper around the AudiogramDigitization model
-import subprocess, tempfile, os, json
+import subprocess, tempfile, os, json, glob
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -15,6 +15,7 @@ def health():
 @app.post("/digitize")
 async def digitize(file: UploadFile = File(...)):
     suffix = os.path.splitext(file.filename or "img.png")[1] or ".png"
+
     with tempfile.TemporaryDirectory() as tmp_in, tempfile.TemporaryDirectory() as tmp_out:
         img_path = os.path.join(tmp_in, "image" + suffix)
         with open(img_path, "wb") as f:
@@ -25,14 +26,15 @@ async def digitize(file: UploadFile = File(...)):
             capture_output=True, text=True, timeout=180
         )
 
-        json_path = os.path.join(tmp_out, "image.json")
-        if os.path.exists(json_path):
-            with open(json_path) as f:
-                return json.load(f)
+        json_files = glob.glob(os.path.join(tmp_out, "*.json"))
+
+        if json_files:
+            with open(json_files[0]) as f:
+                data = json.load(f)
+            return {"result": data}
         else:
-            return {"error": "no output produced",
-                    "stdout": (out.stdout or "")[:800],
-                    "stderr": (out.stderr or "")[:800]}
-    finally:
-        try: os.remove(img_path)
-        except Exception: pass
+            return {
+                "error": "no output produced by digitize_report.py",
+                "stdout": (out.stdout or "")[:1000],
+                "stderr": (out.stderr or "")[:1000],
+            }
